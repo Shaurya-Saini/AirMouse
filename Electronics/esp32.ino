@@ -1,10 +1,7 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <BleMouse.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLE2902.h>
+
 
 #define BUTTON_PIN 5 // Toggle button for modes
 
@@ -14,12 +11,33 @@
 //online baought black
 #define FLEX_RIGHT_PIN 35 // Right click flex sensor
 
+#define CLICK_SIGNAL_DELAY 40 // Milliseconds between signal clicks
+#define BUTTON_DEBOUNCE_MS 500 // Milliseconds to wait after button press
+
 MPU6050 mpu;
 BleMouse bleMouse("ESP32 Mouse", "ESP32", 100); // working fine stand alone
 
-bool gestureMode = false;
-BLECharacteristic *pCharacteristic;
-unsigned long lastButtonPress = 0;
+bool gestureMode = false; // false = Air Mouse Mode, true = CV Gesture Mode
+unsigned long lastButtonPressTime = 0;
+bool lastButtonState = LOW; // Assuming INPUT_PULLDOWN, so LOW is resting state
+
+
+// Function to send the 3 middle clicks signal
+void sendModeSwitchSignal() {
+    if (!bleMouse.isConnected()) {
+        Serial.println("BLE not connected, cannot send signal.");
+        return;
+    }
+    Serial.println("Sending mode switch signal (3 middle clicks)...");
+    bleMouse.click(MOUSE_MIDDLE);
+    delay(CLICK_SIGNAL_DELAY);
+    bleMouse.click(MOUSE_MIDDLE);
+    delay(CLICK_SIGNAL_DELAY);
+    bleMouse.click(MOUSE_MIDDLE);
+    Serial.println("Signal sent.");
+}
+
+
 
 void airmouse_mode() {
     if (!gestureMode && bleMouse.isConnected()) {
@@ -56,6 +74,40 @@ void airmouse_mode() {
     delay(10);
 }
 
+
+// Function to check the button state and toggle mode
+void checkButton() {
+    bool currentButtonState = digitalRead(BUTTON_PIN);
+    unsigned long currentTime = millis();
+
+    // Check for rising edge (button pressed) with debounce
+    if (currentButtonState == HIGH && lastButtonState == LOW && (currentTime - lastButtonPressTime > BUTTON_DEBOUNCE_MS)) {
+        lastButtonPressTime = currentTime;
+        gestureMode = !gestureMode; // Toggle the mode
+
+        if (gestureMode) {
+            Serial.println("Button Pressed: Switching to GESTURE Mode.");
+            // Ensure mouse buttons are released when entering gesture mode
+            if(bleMouse.isConnected()){
+                 bleMouse.release(MOUSE_LEFT);
+                 bleMouse.release(MOUSE_RIGHT);
+                 // Optionally add MIDDLE, BACK, FORWARD releases if used elsewhere
+            }
+             // Send the signal *after* releasing buttons if needed
+            sendModeSwitchSignal();
+        } else {
+            Serial.println("Button Pressed: Switching to AIR MOUSE Mode.");
+            // Send the signal
+            sendModeSwitchSignal();
+            // Air mouse functionality will resume automatically in loop()
+        }
+    }
+    lastButtonState = currentButtonState; // Update last state for edge detection
+}
+
+
+
+
 void setup() {
     Wire.begin();
     Serial.begin(115200);
@@ -69,37 +121,13 @@ void setup() {
     pinMode(FLEX_LEFT_PIN, INPUT);
     pinMode(FLEX_RIGHT_PIN, INPUT);
     pinMode(BUTTON_PIN, INPUT_PULLDOWN);
-    BLEDevice::init("ESP32 Gesture Mode");
-
-    // BLE Server Setup
-    BLEServer *pServer = BLEDevice::createServer();
-    BLEService *pService = pServer->createService("0000181a-0000-1000-8000-00805f9b34fb");
-    pCharacteristic = pService->createCharacteristic(
-        "00002a56-0000-1000-8000-00805f9b34fb",
-        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-    );
-    pCharacteristic->addDescriptor(new BLE2902());
-    pService->start();
 }
 
 void loop() {
-    if (millis() - lastButtonPress > 300) {
-        if (digitalRead(BUTTON_PIN) == HIGH) {
-            lastButtonPress = millis();
-            gestureMode = !gestureMode;
+    // Check the button state on every loop iteration
+    checkButton();
 
-            if (gestureMode) {
-                Serial.println("Switching to Gesture Mode...");
-                pCharacteristic->setValue("Gesture Mode ON");
-                pCharacteristic->notify();
-            } else {
-                Serial.println("Switching to Air Mouse Mode...");
-                pCharacteristic->setValue("Gesture Mode OFF");
-                pCharacteristic->notify();
-            }
-        }
-    }
-
+    // Only run air mouse functions if NOT in gesture mode
     if (!gestureMode) {
         airmouse_mode();
     }
