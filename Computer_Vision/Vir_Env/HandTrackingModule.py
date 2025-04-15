@@ -13,7 +13,8 @@ class handDetector:
 
         self.mpHands = mp.solutions.hands
         self.hands = self.mpHands.Hands(
-            static_image_mode=self.mode,
+            # static_image_mode=self.mode,
+            static_image_mode=True,
             max_num_hands=self.maxHands,
             min_detection_confidence=self.detectionCon,
             min_tracking_confidence=self.trackCon
@@ -101,7 +102,8 @@ def main():
     cap = cv2.VideoCapture(0)
     cap.set(3, 640)  # Set width
     cap.set(4, 480)  # Set height
-    detector = handDetector(detectionCon=0.7, trackCon=0.7)
+    # detector = handDetector(detectionCon=0.7, trackCon=0.7)
+    detector = handDetector(detectionCon=0.9, trackCon=0.8)
     pTime = 0
 
     while True:

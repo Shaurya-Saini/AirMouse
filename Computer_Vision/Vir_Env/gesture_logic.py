@@ -23,10 +23,11 @@ def run_gesture_control(stop_event):
     wCam, hCam = 640, 480
     frameR = 100  # Frame Reduction for cursor movement zone
     smoothening = 5 # Factor to smoothen mouse movement (adjust as needed)
-    prevYScroll = 0
+    # prevYScroll = 0 # No longer needed for scroll gesture itself
+    prevYVol = 0 # Previous vertical position for volume control
     pTime = 0
-    plocX, plocY = 0, 0 # Previous location
-    clocX, clocY = 0, 0 # Current location
+    plocX, plocY = 0, 0 # Previous location (for potential mouse move)
+    clocX, clocY = 0, 0 # Current location (for potential mouse move)
 
     # ========== Init ==========
     cap = cv2.VideoCapture(0)
@@ -55,14 +56,12 @@ def run_gesture_control(stop_event):
                 time.sleep(0.1) # Prevent tight loop on error
                 continue
 
-            img = cv2.flip(img, 1) # Flip image horizontally for intuitive control
-
             # Find Hand
             img = detector.findHands(img)
             lmList, bbox = detector.findPosition(img, draw=False) # Don't draw default positions
 
             if lmList:
-                # Get tip of index and middle fingers
+                # Get tip of index and middle fingers (needed for volume control)
                 x1, y1 = lmList[8][1:]   # Index finger tip
                 x2, y2 = lmList[12][1:]  # Middle finger tip
 
@@ -73,66 +72,73 @@ def run_gesture_control(stop_event):
                 # Draw movement region
                 cv2.rectangle(img, (frameR, frameR), (wCam - frameR, hCam - frameR), (255, 0, 255), 2)
 
-                # ========== Mode 1: Moving Mode (Only Index Finger up) ==========
-                # For future mouse control, currently placeholder/unused in this specific request
-                # if fingers[1] == 1 and fingers[0] == 0 and fingers[2] == 0 and fingers[3] == 0 and fingers[4] == 0:
-                #     # Convert Coordinates to screen resolution
-                #     x_mapped = np.interp(x1, (frameR, wCam - frameR), (0, screenW))
-                #     y_mapped = np.interp(y1, (frameR, hCam - frameR), (0, screenH))
-                #
-                #     # Smoothen Values
-                #     clocX = plocX + (x_mapped - plocX) / smoothening
-                #     clocY = plocY + (y_mapped - plocY) / smoothening
-                #
-                #     # Move Mouse (Uncomment to enable mouse movement)
-                #     # pyautogui.moveTo(clocX, clocY)
-                #     cv2.circle(img, (x1, y1), 15, (255, 0, 255), cv2.FILLED) # Draw indicator
-                #     plocX, plocY = clocX, clocY
-                #     print("🖐️ Moving Mode (Index Finger)") # Keep print minimal
-                #     prevYScroll = 0 # Reset scroll when moving
 
-                # ========== Mode 2: Scrolling Mode (Index and Middle up) ==========
+                # ========== Volume Control (Index + Middle up + Vertical Movement) ==========
                 if fingers[1] == 1 and fingers[2] == 1 and fingers[3] == 0 and fingers[4] == 0:
-                    # Check distance between fingers for click (optional, not used here)
-                    length, img, lineInfo = detector.findDistance(8, 12, img)
-                    # print(f"Scroll Mode - Dist: {length:.1f}", flush=True) # Debug
+                    # Calculate the average vertical position of the index and middle fingers
+                    yVol = (y1 + y2) // 2
+                    # Draw a circle for visual feedback on the control point
+                    cv2.circle(img, ( (x1+x2)//2, yVol ), 10, (0, 255, 0), cv2.FILLED)
 
-                    yScroll = (y1 + y2) // 2
-                    if prevYScroll != 0:
-                        diff = yScroll - prevYScroll
-                        scroll_amount = 0
-                        scroll_threshold = 10 # Sensitivity for scroll detection
+                    if prevYVol != 0:
+                        diff = yVol - prevYVol
+                        vol_action = None
+                        vol_threshold = 15 # Sensitivity for volume change detection (adjust as needed)
 
-                        if abs(diff) > scroll_threshold:
-                            if diff > 0:
-                                scroll_amount = -30 # Scroll Down (adjust units)
-                                print("📜 Scrolling Down", flush=True)
-                            else:
-                                scroll_amount = 30  # Scroll Up (adjust units)
-                                print("📜 Scrolling Up", flush=True)
+                        if abs(diff) > vol_threshold:
+                            if diff > 0: # Hand moved DOWN on screen
+                                vol_action = "volumedown"
+                                print("🔉 Volume Down", flush=True)
+                            else: # Hand moved UP on screen
+                                vol_action = "volumeup"
+                                print("🔊 Volume Up", flush=True)
 
-                            if scroll_amount != 0:
-                                pyautogui.scroll(scroll_amount)
-                                # Add a small delay to prevent overly fast scrolling
-                                time.sleep(0.03)
+                            if vol_action:
+                                pyautogui.press(vol_action)
+                                pyautogui.press(vol_action)
+                                pyautogui.press(vol_action)
+                                time.sleep(0.15) # Add delay to prevent rapid repeats
 
-                    prevYScroll = yScroll # Update previous position for next frame's comparison
+                    prevYVol = yVol # Update previous position for next frame's comparison
 
-                else: # If not in scroll gesture, reset prevYScroll
-                    prevYScroll = 0
+                # ========== Scroll Up (All fingers up) ==========
+                elif fingers == [1, 1, 1, 1, 1]:
+                    pyautogui.scroll(80) # Positive value scrolls UP (adjust amount as needed)
+                    print("📜 Scrolling Up", flush=True)
+                    time.sleep(0.15) # Add delay to prevent rapid repeats
+                    prevYVol = 0 # Reset volume tracking when scrolling
 
-                # ========== Mode 3: Volume Control ==========
-                # Hand open (all fingers up) -> Volume Up
-                if fingers == [1, 1, 1, 1, 1]:
-                    pyautogui.press("volumeup")
-                    print("🔊 Volume Up", flush=True)
-                    time.sleep(0.2) # Add delay to prevent rapid repeats
-
-                # Fist (all fingers down) -> Volume Down
+                # ========== Scroll Down (All fingers down / Fist) ==========
                 elif fingers == [0, 0, 0, 0, 0]:
-                    pyautogui.press("volumedown")
-                    print("🔉 Volume Down", flush=True)
-                    time.sleep(0.2) # Add delay
+                    pyautogui.scroll(-80) # Negative value scrolls DOWN (adjust amount as needed)
+                    print("📜 Scrolling Down", flush=True)
+                    time.sleep(0.15) # Add delay to prevent rapid repeats
+                    prevYVol = 0 # Reset volume tracking when scrolling
+
+                # ========== CHANGED: Next Tab (Thumb + Index Finger Up Only) ==========
+                elif fingers == [1, 1, 0, 0, 0]: # Condition changed here
+                    pyautogui.hotkey('ctrl', 'tab')
+                    print("📄 Next Tab", flush=True)
+                    time.sleep(0.3) # Add longer delay for tab switching
+                    prevYVol = 0 # Reset volume tracking
+
+                # ========== CHANGED: Previous Tab (Thumb + Index + Pinky Finger Up Only) ==========
+                elif fingers == [1, 1, 0, 0, 1]: # Condition changed here
+                    pyautogui.hotkey('ctrl', 'shift', 'tab')
+                    print("📄 Previous Tab", flush=True)
+                    time.sleep(0.3) # Add longer delay for tab switching
+                    prevYVol = 0 # Reset volume tracking
+
+                # ========== Reset previous vertical position if not in Volume gesture ==========
+                else:
+                     prevYVol = 0 # Reset if not in Index+Middle finger up state or other specific gestures
+
+
+                # ========== (No change below this point regarding gestures) ==========
+
+            else: # No hand detected
+                prevYVol = 0 # Reset if no hand is found
+
 
             # ========== FPS Calculation ==========
             cTime = time.time()
@@ -153,7 +159,7 @@ def run_gesture_control(stop_event):
                  stop_event.set()
 
             # Give the CPU a tiny break
-            # time.sleep(0.01) # Can uncomment if CPU usage is too high
+            # time.sleep(0.01)
 
 
     except Exception as e:
@@ -174,7 +180,8 @@ def run_gesture_control(stop_event):
 # Optional: Add a block to test this file standalone
 if __name__ == "__main__":
     print("Running gesture_logic.py standalone test...")
-    print("Press Middle Mouse Button 3 times quickly to simulate toggle (won't work here).")
+    # Updated print statement for new tab gestures
+    print("Gestures: Open Hand=Scroll Up, Fist=Scroll Down, Index+Middle+Move=Volume, Thumb+Index=Next Tab, Thumb+Index+Pinky=Prev Tab")
     print("Press 'q' or ESC in the OpenCV window to stop.")
     # Create a dummy stop event for standalone testing
     stop_event = threading.Event()

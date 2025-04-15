@@ -12,7 +12,7 @@
 #define FLEX_RIGHT_PIN 35 // Right click flex sensor
 
 #define CLICK_SIGNAL_DELAY 40 // Milliseconds between signal clicks
-#define BUTTON_DEBOUNCE_MS 500 // Milliseconds to wait after button press
+#define BUTTON_DEBOUNCE_MS 5000 // Milliseconds to wait after button press
 
 MPU6050 mpu;
 BleMouse bleMouse("ESP32 Mouse", "ESP32", 100); // working fine stand alone
@@ -58,7 +58,9 @@ void airmouse_mode() {
 
         //have to adjust values based on the sensor approx done
         // offline baought golden
-        if (flexLeftValue > 1100) {
+        if (flexLeftValue < 25) {
+            Serial.println(flexLeftValue);
+            Serial.println("left value");
             bleMouse.press(MOUSE_LEFT);
         } else {
             bleMouse.release(MOUSE_LEFT);
@@ -66,6 +68,8 @@ void airmouse_mode() {
 
         //online baought black
         if (flexRightValue > 4000) {
+            Serial.println(flexRightValue);
+            Serial.println("rihgt value");
             bleMouse.press(MOUSE_RIGHT);
         } else {
             bleMouse.release(MOUSE_RIGHT);
