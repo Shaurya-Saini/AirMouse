@@ -3,8 +3,13 @@ import threading
 from pynput import mouse
 import sys # For flushing print output
 import platform
+import os
 
 # --- Try importing the gesture logic ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+print(current_dir)
+sys.path.insert(0, current_dir)
+
 try:
     import gesture_logic
 except ImportError:

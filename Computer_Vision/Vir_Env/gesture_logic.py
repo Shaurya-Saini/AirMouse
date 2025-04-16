@@ -124,8 +124,8 @@ def run_gesture_control(stop_event):
 
                 # ========== CHANGED: Previous Tab (Thumb + Index + Pinky Finger Up Only) ==========
                 elif fingers == [1, 1, 0, 0, 1]: # Condition changed here
-                    pyautogui.hotkey('ctrl', 'shift', 'tab')
-                    print("📄 Previous Tab", flush=True)
+                    pyautogui.hotkey('alt', 'tab')
+                    print("📄 Window change", flush=True)
                     time.sleep(0.3) # Add longer delay for tab switching
                     prevYVol = 0 # Reset volume tracking
 
