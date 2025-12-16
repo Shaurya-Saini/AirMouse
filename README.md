@@ -1,5 +1,16 @@
 # Air Mouse: Dual-Mode Wireless Human-Computer Interface
 
+<div style="text-align:center;">
+  <img
+    src="Working%20Prototype/Glove%20image.jpg"
+    alt="Prototype"
+    title="AirMouse Prototype"
+    width="500"
+  />
+</div>
+
+
+
 ## Overview  
 The **Air Mouse** is a wireless, dual-mode input device that enables **cursor control, left/right clicks, scrolling, zooming, volume control, and tab/application switching** through motion tracking and hand gesture recognition. It combines embedded sensor data and real-time computer vision for seamless human-computer interaction.
 
